@@ -1,0 +1,55 @@
+#!/bin/bash
+
+LOGFILE="/home/$USER/passenger_mgmt.log"
+
+check_root() {
+    if [ "$EUID" -ne 0 ]; then
+        echo "Please run as root"
+        exit 1
+    fi
+}
+
+add_passenger() {
+    dialog --inputbox "Enter Passenger Username:" 8 40 2>temp.txt
+    username=$(<temp.txt)
+    useradd "$username"
+    passwd "$username"
+    echo "[$(date)] Added passenger: $username" >> "$LOGFILE"
+}
+
+delete_passenger() {
+    dialog --inputbox "Enter Username to Delete:" 8 40 2>temp.txt
+    username=$(<temp.txt)
+    dialog --yesno "Are you sure you want to delete $username?" 7 50
+    if [ $? -eq 0 ]; then
+        userdel -r "$username"
+        echo "[$(date)] Deleted passenger: $username" >> "$LOGFILE"
+    fi
+}
+
+list_passengers() {
+    cut -d: -f1 /etc/passwd > temp.txt
+    dialog --textbox temp.txt 20 50
+}
+
+main_menu() {
+    while true; do
+        CHOICE=$(dialog --clear --backtitle "Passenger Management System" \
+        --title "Main Menu" \
+        --menu "Choose an option" 15 50 6 \
+        1 "Add Passenger" \
+        2 "Delete Passenger" \
+        3 "List Passengers" \
+        4 "Exit" 2>&1 >/dev/tty)
+
+        case $CHOICE in
+            1) add_passenger ;;
+            2) delete_passenger ;;
+            3) list_passengers ;;
+            4) clear; break ;;
+        esac
+    done
+}
+
+check_root
+main_menu
