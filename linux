@@ -31,6 +31,34 @@ list_passengers() {
     cut -d: -f1 /etc/passwd > temp.txt
     dialog --textbox temp.txt 20 50
 }
+modify_passengers() {
+    dialog --inputbox "Enter Username to Modify:" 8 40 2>temp.txt
+    old_username=$(<temp.txt)
+
+    dialog --menu "What do you want to modify for $old_username?" 15 50 3 \
+    1 "Change Username" \
+    2 "Change Password" \
+    3 "Cancel" 2>temp.txt
+
+    choice=$(<temp.txt)
+
+    case $choice in
+        1)
+            dialog --inputbox "Enter New Username:" 8 40 2>temp.txt
+            new_username=$(<temp.txt)
+            usermod -l "$new_username" "$old_username"
+            echo "[$(date)] Changed username from "$old_username" to "$new_username" >> "$LOGFILE"
+            ;;
+        2)
+            passwd "$old_username"
+            echo "[$(date)] Changed password for "$old_username" >> "$LOGFILE"
+            ;;
+        *)
+            echo "Modification cancelled" >> "$LOGFILE"
+            ;;
+    esac
+}
+
 
 main_menu() {
     while true; do
@@ -40,13 +68,15 @@ main_menu() {
         1 "Add Passenger" \
         2 "Delete Passenger" \
         3 "List Passengers" \
-        4 "Exit" 2>&1 >/dev/tty)
+        4 "modify Passengers" \
+        5 "Exit" 2>&1 >/dev/tty)
 
         case $CHOICE in
             1) add_passenger ;;
             2) delete_passenger ;;
             3) list_passengers ;;
-            4) clear; break ;;
+            4) modify_passengers ;;
+            5) clear; break ;;
         esac
     done
 }
