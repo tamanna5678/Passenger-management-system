@@ -47,11 +47,11 @@ modify_passengers() {
             dialog --inputbox "Enter New Username:" 8 40 2>temp.txt
             new_username=$(<temp.txt)
             usermod -l "$new_username" "$old_username"
-            echo "[$(date)] Changed username from "$old_username" to "$new_username" >> "$LOGFILE"
+            echo "[$(date)] Changed username from $old_username to $new_username" >> "$LOGFILE"
             ;;
         2)
             passwd "$old_username"
-            echo "[$(date)] Changed password for "$old_username" >> "$LOGFILE"
+            echo "[$(date)] Changed password for $old_username" >> "$LOGFILE"
             ;;
         *)
             echo "Modification cancelled" >> "$LOGFILE"
