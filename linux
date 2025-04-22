@@ -68,7 +68,7 @@ main_menu() {
         1 "Add Passenger" \
         2 "Delete Passenger" \
         3 "List Passengers" \
-        4 "modify Passengers" \
+        4 "Modify Passengers" \
         5 "Exit" 2>&1 >/dev/tty)
 
         case $CHOICE in
