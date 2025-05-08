@@ -1,75 +1,130 @@
 #!/bin/bash
 
+CSV_FILE="/home/$USER/passengers.csv"
 LOGFILE="/home/$USER/passenger.log"
+TEMPFILE=$(mktemp)
 
-check_root() {
-    if [ "$EUID" -ne 0 ]; then
-        echo "Please run as root"
+# Ensure CSV exists and has header
+if [ ! -f "$CSV_FILE" ] || [ ! -s "$CSV_FILE" ]; then
+    echo "username,password,age,email,contact,route,timings" > "$CSV_FILE"
+fi
+
+login() {
+    dialog --inputbox "Enter Username:" 8 40 2>$TEMPFILE
+    login_user=$(<"$TEMPFILE")
+    [ -z "$login_user" ] && dialog --msgbox "Username cannot be empty!" 6 30 && exit 1
+
+    dialog --insecure --passwordbox "Enter Password:" 8 40 2>$TEMPFILE
+    login_pass=$(<"$TEMPFILE")
+    [ -z "$login_pass" ] && dialog --msgbox "Password cannot be empty!" 6 30 && exit 1
+
+    if grep -qi "^$login_user,$login_pass" "$CSV_FILE"; then
+        dialog --msgbox "Login Successful" 6 30
+    else
+        dialog --msgbox "Login Failed" 6 30
         exit 1
     fi
 }
 
 add_passenger() {
-    dialog --inputbox "Enter Passenger Username:" 8 40 2>temp.txt
-    username=$(<temp.txt)
-    useradd "$username"
-    passwd "$username"
-    echo "[$(date)] Added passenger: $username" >> "$LOGFILE"
+    dialog --inputbox "Enter Passenger Username:" 8 40 2>$TEMPFILE
+    username=$(<"$TEMPFILE")
+    [ -z "$username" ] && dialog --msgbox "Username cannot be empty!" 6 30 && return
+
+    dialog --insecure --passwordbox "Enter Password for $username:" 8 40 2>$TEMPFILE
+    password=$(<"$TEMPFILE")
+    [ -z "$password" ] && dialog --msgbox "Password cannot be empty!" 6 30 && return
+
+    dialog --inputbox "Enter Age:" 8 40 2>$TEMPFILE
+    age=$(<"$TEMPFILE")
+    dialog --inputbox "Enter Email:" 8 40 2>$TEMPFILE
+    email=$(<"$TEMPFILE")
+    dialog --inputbox "Enter Contact Number:" 8 40 2>$TEMPFILE
+    contact=$(<"$TEMPFILE")
+    dialog --inputbox "Enter Route:" 8 40 2>$TEMPFILE
+    route=$(<"$TEMPFILE")
+    dialog --inputbox "Enter Timings:" 8 40 2>$TEMPFILE
+    timings=$(<"$TEMPFILE")
+
+    dialog --yesno "Add passenger $username?" 7 40
+    if [ $? -eq 0 ]; then
+        echo "$username,$password,$age,$email,$contact,$route,$timings" >> "$CSV_FILE"
+        echo "[$(date)] Added passenger: $username" >> "$LOGFILE"
+    fi
 }
 
 delete_passenger() {
-    dialog --inputbox "Enter Username to Delete:" 8 40 2>temp.txt
-    username=$(<temp.txt)
+    dialog --inputbox "Enter Username to Delete:" 8 40 2>$TEMPFILE
+    username=$(<"$TEMPFILE")
+    [ -z "$username" ] && dialog --msgbox "Username cannot be empty!" 6 30 && return
+
     dialog --yesno "Are you sure you want to delete $username?" 7 50
     if [ $? -eq 0 ]; then
-        userdel -r "$username"
+        TMPFILE=$(mktemp)
+        grep -iv "^$username," "$CSV_FILE" > "$TMPFILE" && mv "$TMPFILE" "$CSV_FILE"
         echo "[$(date)] Deleted passenger: $username" >> "$LOGFILE"
     fi
 }
 
 list_passengers() {
-    cut -d: -f1 /etc/passwd > temp.txt
-    dialog --textbox temp.txt 20 50
+    tail -n +2 "$CSV_FILE" | column -t -s, > "$TEMPFILE"
+    dialog --textbox "$TEMPFILE" 20 70
 }
+
 modify_passengers() {
-    dialog --inputbox "Enter Username to Modify:" 8 40 2>temp.txt
-    old_username=$(<temp.txt)
+    dialog --inputbox "Enter Username to Modify:" 8 40 2>$TEMPFILE
+    old_username=$(<"$TEMPFILE")
+    [ -z "$old_username" ] && dialog --msgbox "Username cannot be empty!" 6 30 && return
 
-    dialog --menu "What do you want to modify for $old_username?" 15 50 3 \
-    1 "Change Username" \
-    2 "Change Password" \
-    3 "Cancel" 2>temp.txt
+    line=$(grep -i "^$old_username," "$CSV_FILE")
+    if [ -z "$line" ]; then
+        dialog --msgbox "Passenger not found." 6 40
+        return
+    fi
 
-    choice=$(<temp.txt)
+    IFS=',' read -r username password age email contact route timings <<< "$line"
+
+    dialog --menu "What do you want to modify for $old_username?" 15 50 8 \
+        1 "Change Username" \
+        2 "Change Password" \
+        3 "Change Age" \
+        4 "Change Email" \
+        5 "Change Contact" \
+        6 "Change Route" \
+        7 "Change Timings" \
+        8 "Cancel" 2>$TEMPFILE
+
+    choice=$(<"$TEMPFILE")
 
     case $choice in
-        1)
-            dialog --inputbox "Enter New Username:" 8 40 2>temp.txt
-            new_username=$(<temp.txt)
-            usermod -l "$new_username" "$old_username"
-            echo "[$(date)] Changed username from $old_username to $new_username" >> "$LOGFILE"
-            ;;
-        2)
-            passwd "$old_username"
-            echo "[$(date)] Changed password for $old_username" >> "$LOGFILE"
-            ;;
-        *)
-            echo "Modification cancelled" >> "$LOGFILE"
-            ;;
+        1) dialog --inputbox "Enter New Username:" 8 40 2>$TEMPFILE; username=$(<"$TEMPFILE") ;;
+        2) dialog --insecure --passwordbox "Enter New Password:" 8 40 2>$TEMPFILE; password=$(<"$TEMPFILE") ;;
+        3) dialog --inputbox "Enter New Age:" 8 40 2>$TEMPFILE; age=$(<"$TEMPFILE") ;;
+        4) dialog --inputbox "Enter New Email:" 8 40 2>$TEMPFILE; email=$(<"$TEMPFILE") ;;
+        5) dialog --inputbox "Enter New Contact Number:" 8 40 2>$TEMPFILE; contact=$(<"$TEMPFILE") ;;
+        6) dialog --inputbox "Enter New Route:" 8 40 2>$TEMPFILE; route=$(<"$TEMPFILE") ;;
+        7) dialog --inputbox "Enter New Timings:" 8 40 2>$TEMPFILE; timings=$(<"$TEMPFILE") ;;
+        8) dialog --msgbox "Modification cancelled." 6 30; return ;;
     esac
-}
 
+    TMPFILE=$(mktemp)
+    grep -iv "^$old_username," "$CSV_FILE" > "$TMPFILE"
+    echo "$username,$password,$age,$email,$contact,$route,$timings" >> "$TMPFILE"
+    mv "$TMPFILE" "$CSV_FILE"
+
+    echo "[$(date)] Modified passenger: $old_username" >> "$LOGFILE"
+}
 
 main_menu() {
     while true; do
         CHOICE=$(dialog --clear --backtitle "Passenger Management System" \
-        --title "Main Menu" \
-        --menu "Choose an option" 15 50 6 \
-        1 "Add Passenger" \
-        2 "Delete Passenger" \
-        3 "List Passengers" \
-        4 "Modify Passengers" \
-        5 "Exit" 2>&1 >/dev/tty)
+            --title "Main Menu" \
+            --menu "Choose an option" 15 50 6 \
+            1 "Add Passenger" \
+            2 "Delete Passenger" \
+            3 "List Passengers" \
+            4 "Modify Passengers" \
+            5 "Exit" 2>&1 >/dev/tty)
 
         case $CHOICE in
             1) add_passenger ;;
@@ -81,5 +136,9 @@ main_menu() {
     done
 }
 
-check_root
+# Entry Point
+login
 main_menu
+
+# Clean up
+rm -f "$TEMPFILE"
